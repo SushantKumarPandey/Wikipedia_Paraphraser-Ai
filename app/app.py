@@ -15,61 +15,66 @@ st.markdown("""
 
 st.title("Wikipedia Paraphraser AI")
 st.caption(
-    "Fetches a Wikipedia article summary and rewrites it using an AI language model. "
-    "Configure language, model and options in the sidebar."
+    "Type any topic to fetch the Wikipedia summary and get an AI-generated paraphrase side by side."
 )
+
+# If API key is pre-configured server-side (Streamlit Cloud secrets / .env),
+# hide the key fields so visitors can use the app directly without setup.
+server_configured = bool(DEFAULT_API_KEY)
 
 with st.sidebar:
     st.subheader("Settings")
-
     wiki_lang = st.selectbox("Wikipedia Language", ["de", "en"], index=1)
 
     st.markdown("---")
-    st.subheader("LLM API")
-
-    # Allow env-var pre-configuration OR manual entry
-    api_key = st.text_input(
-        "API Key",
-        value=DEFAULT_API_KEY,
-        type="password",
-        help="Groq API key (free at console.groq.com) or any OpenAI-compatible key."
-    )
-    base_url = st.text_input(
-        "API Base URL",
-        value=DEFAULT_BASE_URL,
-        help="Groq: https://api.groq.com/openai/v1  |  OpenAI: https://api.openai.com/v1"
-    )
     model = st.selectbox(
         "Model",
         ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gpt-4o-mini"],
         index=0
     )
     temperature = st.slider("Paraphrase Strength", 0.0, 1.0, 0.7, 0.05,
-                            help="0 = close to original, 1 = more creative")
-    streaming = st.toggle("Streaming", value=True, help="Show text live as the model generates it")
+                            help="0 = close to original  |  1 = more creative")
+    streaming = st.toggle("Streaming", value=True, help="Show text live as it is generated")
 
     st.markdown("---")
+
+    if not server_configured:
+        # No server key — let the visitor enter their own
+        st.subheader("API Key")
+        api_key = st.text_input(
+            "Groq API Key",
+            value="",
+            type="password",
+            help="Free key at console.groq.com — no credit card needed."
+        )
+        base_url = DEFAULT_BASE_URL
+        with st.expander("How to get a free key"):
+            st.markdown(
+                "1. Go to **[console.groq.com](https://console.groq.com)**\n"
+                "2. Sign up (free, no credit card)\n"
+                "3. **API Keys → Create API key**\n"
+                "4. Paste it above and click **Fetch & Paraphrase**"
+            )
+    else:
+        # Key is pre-configured — visitors use the app directly, no setup needed
+        api_key = DEFAULT_API_KEY
+        base_url = DEFAULT_BASE_URL
+
     with st.expander("ℹ️ About"):
         st.write(
-            "This app fetches the short Wikipedia summary for any topic and paraphrases it "
-            "using a large language model via an OpenAI-compatible API. "
-            "Built with Streamlit as a university project at TH Lübeck."
-        )
-    with st.expander("❓ How to get a free API key"):
-        st.markdown(
-            "1. Go to **[console.groq.com](https://console.groq.com)**\n"
-            "2. Sign up for free\n"
-            "3. Click **API Keys → Create API key**\n"
-            "4. Paste it in the **API Key** field above\n\n"
-            "The default Base URL `https://api.groq.com/openai/v1` is already set."
+            "Fetches the short Wikipedia summary for any topic and paraphrases it "
+            "using Llama 3.3-70b via Groq. Built with Streamlit as a university project at TH Lübeck."
         )
 
-topic = st.text_input("Topic / Wikipedia page title", value="Blockchain")
-go = st.button("Fetch & Paraphrase")
+topic = st.text_input("Topic / Wikipedia page title", placeholder="e.g. Blockchain, Paris, Artificial Intelligence")
+go = st.button("Fetch & Paraphrase", type="primary")
 
 if go:
+    if not topic.strip():
+        st.warning("Please enter a topic.")
+        st.stop()
     if not api_key:
-        st.warning("Please enter an API key in the sidebar. Get a free one at console.groq.com")
+        st.warning("Please enter your Groq API key in the sidebar. Get a free one at console.groq.com")
         st.stop()
 
     with st.spinner(f"Fetching Wikipedia ({wiki_lang}) …"):
@@ -117,7 +122,8 @@ if go:
                                file_name=f"{res.get('title', 'article')}_paraphrase.txt")
 
     st.caption(
-        f"Source: Wikipedia REST API · Page: {res.get('title', '–')} · Language: {res.get('lang', '–')} · Model: {model}"
+        f"Source: Wikipedia REST API · Page: {res.get('title', '–')} · "
+        f"Language: {res.get('lang', '–')} · Model: {model}"
     )
     st.success("Done ✅")
 
@@ -128,5 +134,5 @@ with st.expander("Debug"):
         "model": model,
         "temperature": temperature,
         "streaming": streaming,
-        "base_url": base_url,
+        "server_configured": server_configured,
     })
