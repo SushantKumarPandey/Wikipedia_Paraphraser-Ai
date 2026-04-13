@@ -1,3 +1,4 @@
+import html as html_mod
 import random
 import urllib.parse
 import streamlit as st
@@ -104,6 +105,10 @@ def sim_color(s):
 def wiki_url(title, lang):
     return f"https://{lang}.wikipedia.org/wiki/{title.replace(' ','_')}"
 
+def esc(text):
+    """Escape text for safe insertion into HTML templates."""
+    return html_mod.escape(str(text))
+
 # auto-fill topic from share link
 url_topic = st.query_params.get("topic", "")
 if url_topic and not st.session_state.topic_input:
@@ -204,7 +209,7 @@ if go:
                     parts.append(piece or "")
                     box.markdown(
                         f"<div class='card'><div class='card-title'>✍️ Generating…</div>"
-                        f"<div class='card-text'>{''.join(parts)}</div></div>",
+                        f"<div class='card-text'>{esc(''.join(parts))}</div></div>",
                         unsafe_allow_html=True)
                 para = "".join(parts).strip()
                 box.empty()
@@ -274,7 +279,7 @@ if st.session_state.last_original:
             <span class='pill pill-green'>{read_time(original)} read</span>
             &nbsp;<a href='{wiki_url(title_res, lang_res)}' target='_blank'>Full article ↗</a>
           </div>
-          <div class='card-text'>{original}</div>
+          <div class='card-text'>{esc(original)}</div>
         </div>""", unsafe_allow_html=True)
         st.download_button("⬇ Download Original (.txt)", original.encode(),
                            file_name=f"{title_res}_original.txt", use_container_width=True)
@@ -295,7 +300,7 @@ if st.session_state.last_original:
                 <span class='pill pill-green'>{read_time(para)} read</span>
                 &nbsp;Tone: <b>{tone}</b> · Length: <b>{length}</b>
               </div>
-              <div class='card-text'>{para}</div>
+              <div class='card-text'>{esc(para)}</div>
             </div>""", unsafe_allow_html=True)
             st.download_button("⬇ Download Paraphrase (.txt)", para.encode(),
                                file_name=f"{title_res}_paraphrase.txt", use_container_width=True)
@@ -354,8 +359,8 @@ if st.session_state.last_original:
                 st.session_state.translation = translate_text(para, target_lang, api_key, base_url)
         if st.session_state.translation:
             st.markdown(
-                f"<div class='card'><div class='card-title'>Translation ({target_lang})</div>"
-                f"<div class='card-text'>{st.session_state.translation}</div></div>",
+                f"<div class='card'><div class='card-title'>Translation ({esc(target_lang)})</div>"
+                f"<div class='card-text'>{esc(st.session_state.translation)}</div></div>",
                 unsafe_allow_html=True)
             st.download_button("⬇ Download Translation (.txt)",
                                st.session_state.translation.encode(),
@@ -444,11 +449,11 @@ if st.session_state.last_original:
             if "cmp_result_a" in st.session_state:
                 r = st.session_state["cmp_result_a"]
                 st.markdown(
-                    f"<div class='card'><div class='card-title'>{r['title']}</div>"
+                    f"<div class='card'><div class='card-title'>{esc(r['title'])}</div>"
                     f"<div class='card-meta'>"
                     f"<span class='pill pill-purple'>{word_count(r['extract'])} words</span>"
                     f"<a href='{wiki_url(r['title'], r['lang'])}' target='_blank'>Wikipedia ↗</a>"
-                    f"</div><div class='card-text'>{r['extract']}</div></div>",
+                    f"</div><div class='card-text'>{esc(r['extract'])}</div></div>",
                     unsafe_allow_html=True)
         with cc2:
             topic_b = st.text_input("Topic B", placeholder="e.g. Java", key="cmp_b")
@@ -464,11 +469,11 @@ if st.session_state.last_original:
             if "cmp_result_b" in st.session_state:
                 r = st.session_state["cmp_result_b"]
                 st.markdown(
-                    f"<div class='card'><div class='card-title'>{r['title']}</div>"
+                    f"<div class='card'><div class='card-title'>{esc(r['title'])}</div>"
                     f"<div class='card-meta'>"
                     f"<span class='pill pill-purple'>{word_count(r['extract'])} words</span>"
                     f"<a href='{wiki_url(r['title'], r['lang'])}' target='_blank'>Wikipedia ↗</a>"
-                    f"</div><div class='card-text'>{r['extract']}</div></div>",
+                    f"</div><div class='card-text'>{esc(r['extract'])}</div></div>",
                     unsafe_allow_html=True)
         if "cmp_result_a" in st.session_state and "cmp_result_b" in st.session_state:
             sim_cmp = sim_score(
