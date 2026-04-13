@@ -4,42 +4,52 @@ import requests
 from openai import OpenAI
 from dotenv import load_dotenv
 
+load_dotenv()
+
 HEADERS = {
-    "User-Agent": "THL-Paraphrasierer/1.0 (+https://uber-16703.edu.k8s.th-luebeck.dev; contact: <deine THL-Mail>)",
+    "User-Agent": "Wikipedia-Paraphraser/1.0",
     "Accept": "application/json",
     "Accept-Language": "de,en;q=0.8"
 }
 
-load_dotenv()
-MYLAB_BASE_URL = os.getenv("MYLAB_BASE_URL", "https://models.mylab.th-luebeck.dev/v1")
-MYLAB_API_KEY  = os.getenv("MYLAB_API_KEY", "local-dev")
-DEFAULT_MODEL  = os.getenv("MYLAB_MODEL", "llama-3.3-70b")
+# Default: Groq free API (OpenAI-compatible, supports Llama 3.3-70b)
+DEFAULT_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
+DEFAULT_API_KEY  = os.getenv("LLM_API_KEY", "")
+DEFAULT_MODEL    = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
 
-client = OpenAI(base_url=MYLAB_BASE_URL, api_key=MYLAB_API_KEY)
+
+def _client(api_key: str, base_url: str) -> OpenAI:
+    return OpenAI(api_key=api_key, base_url=base_url)
+
 
 def fetch_wiki(title: str, lang: str = "de", timeout: int = 10):
-    url = f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(title.strip())}?redirect=true"
+    url = (
+        f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/"
+        f"{urllib.parse.quote(title.strip())}?redirect=true"
+    )
     try:
         r = requests.get(url, headers=HEADERS, timeout=timeout)
         if not r.ok:
-            return None, f"Wikipedia-Fehler (HTTP {r.status_code}) für {url}"
+            return None, f"Wikipedia error (HTTP {r.status_code})"
         data = r.json()
         if data.get("type") == "disambiguation":
-            return None, "Begriffsklärungsseite – bitte präziser eingeben (z. B. „Blockchain (Informatik)“)."
+            return None, "Disambiguation page — try a more specific title (e.g. 'Blockchain (technology)')."
         extract = (data.get("extract") or "").strip()
         if not extract:
-            return None, "Keine Kurz-Zusammenfassung gefunden."
+            return None, "No summary found for this topic."
         return {"title": data.get("title") or title, "extract": extract, "lang": lang}, None
     except requests.RequestException as e:
-        return None, f"Netzwerkfehler: {e}"
+        return None, f"Network error: {e}"
 
-def paraphrase(text: str, model: str, temperature: float) -> str:
+
+def paraphrase(text: str, model: str, temperature: float, api_key: str, base_url: str) -> str:
     if not text.strip():
         return ""
+    client = _client(api_key, base_url)
     resp = client.chat.completions.create(
         model=model,
         messages=[
-            {"role": "system", "content": "Paraphrasiere den Eingabetext klar, präzise und faktengetreu. Keine neuen Fakten erfinden."},
+            {"role": "system", "content": "Paraphrase the input text clearly, precisely and faithfully to the facts. Do not invent new facts."},
             {"role": "user", "content": text},
         ],
         temperature=temperature,
@@ -47,13 +57,15 @@ def paraphrase(text: str, model: str, temperature: float) -> str:
     )
     return (resp.choices[0].message.content or "").strip()
 
-def paraphrase_stream(text: str, model: str, temperature: float):
+
+def paraphrase_stream(text: str, model: str, temperature: float, api_key: str, base_url: str):
     if not text.strip():
-        return ""
+        return
+    client = _client(api_key, base_url)
     stream = client.chat.completions.create(
         model=model,
         messages=[
-            {"role": "system", "content": "Paraphrasiere den Eingabetext klar, präzise und faktengetreu. Keine neuen Fakten erfinden."},
+            {"role": "system", "content": "Paraphrase the input text clearly, precisely and faithfully to the facts. Do not invent new facts."},
             {"role": "user", "content": text},
         ],
         stream=True,
