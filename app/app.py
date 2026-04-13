@@ -9,6 +9,14 @@ from paraphraser_backend import (
     DEFAULT_MODEL, DEFAULT_API_KEY, DEFAULT_BASE_URL,
     TONE_PROMPTS, LENGTH_SETTINGS,
 )
+from db import (
+    init_db, register_user, login_user,
+    save_search, get_user_searches, get_user_stats, group_by_date,
+    delete_search,
+)
+
+# ── init DB ────────────────────────────────────────────────────────────────────
+init_db()
 
 LIVE_URL = "https://wikipediaparaphraser-ai-twebnxev5v4d4tagvxjen6.streamlit.app"
 
@@ -53,6 +61,24 @@ st.markdown("""
     margin-bottom:.35rem; font-size:.8rem; border-left:3px solid #a78bfa;
     color:rgba(255,255,255,.65);
 }
+.hist-group-label {
+    font-size:.68rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.08em; color:rgba(255,255,255,.3); margin:.7rem 0 .3rem 0;
+}
+.user-badge {
+    display:flex; align-items:center; gap:.7rem;
+    background:rgba(167,139,250,.08); border:1px solid rgba(167,139,250,.2);
+    border-radius:12px; padding:.65rem .9rem; margin-bottom:.8rem;
+}
+.avatar {
+    width:2.2rem; height:2.2rem; border-radius:50%; flex-shrink:0;
+    background:linear-gradient(135deg,#a78bfa,#60a5fa);
+    display:flex; align-items:center; justify-content:center;
+    font-size:1rem; font-weight:700; color:#fff;
+}
+.user-info { overflow:hidden; }
+.user-name  { font-size:.88rem; font-weight:700; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.user-email { font-size:.7rem; color:rgba(255,255,255,.35); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 a { color:#60a5fa !important; }
 [data-testid="stMetricLabel"] { font-size:.72rem !important; }
 [data-testid="stMetricValue"] { font-size:1.35rem !important; font-weight:700 !important; }
@@ -72,6 +98,12 @@ defaults = {
     "quiz_answers":   {},
     "quiz_submitted": False,
     "quiz_topic":     "",
+    # auth
+    "user_id":        None,
+    "username":       "",
+    "user_email":     "",
+    "auth_error":     "",
+    "user_searches":  [],
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -109,6 +141,10 @@ def esc(text):
     """Escape text for safe insertion into HTML templates."""
     return html_mod.escape(str(text))
 
+def _refresh_user_searches():
+    if st.session_state.user_id:
+        st.session_state.user_searches = get_user_searches(st.session_state.user_id)
+
 # auto-fill topic from share link
 url_topic = st.query_params.get("topic", "")
 if url_topic and not st.session_state.topic_input:
@@ -116,8 +152,70 @@ if url_topic and not st.session_state.topic_input:
 
 # ── sidebar ────────────────────────────────────────────────────────────────────
 server_configured = bool(DEFAULT_API_KEY)
+logged_in = st.session_state.user_id is not None
 
 with st.sidebar:
+
+    # ── AUTH BLOCK ─────────────────────────────────────────────────────────────
+    if not logged_in:
+        st.markdown("### 👤 Account")
+        tab_login, tab_reg = st.tabs(["Login", "Register"])
+
+        with tab_login:
+            with st.form("login_form", clear_on_submit=False):
+                lu = st.text_input("Username", key="li_username")
+                lp = st.text_input("Password", type="password", key="li_password")
+                submitted = st.form_submit_button("Login", use_container_width=True)
+            if submitted:
+                user, err = login_user(lu, lp)
+                if user:
+                    st.session_state.user_id    = user["id"]
+                    st.session_state.username   = user["username"]
+                    st.session_state.user_email = user["email"]
+                    st.session_state.auth_error = ""
+                    _refresh_user_searches()
+                    st.rerun()
+                else:
+                    st.error(err or "Login failed.")
+
+        with tab_reg:
+            with st.form("register_form", clear_on_submit=True):
+                ru = st.text_input("Username", key="reg_username")
+                re_email = st.text_input("Email", key="reg_email")
+                rp = st.text_input("Password", type="password", key="reg_password")
+                submitted_r = st.form_submit_button("Create Account", use_container_width=True)
+            if submitted_r:
+                ok, err = register_user(ru, re_email, rp)
+                if ok:
+                    st.success("Account created — please log in.")
+                else:
+                    st.error(err)
+
+    else:
+        # ── USER BADGE ────────────────────────────────────────────────────────
+        initial = esc(st.session_state.username[0].upper())
+        st.markdown(f"""
+        <div class='user-badge'>
+          <div class='avatar'>{initial}</div>
+          <div class='user-info'>
+            <div class='user-name'>{esc(st.session_state.username)}</div>
+            <div class='user-email'>{esc(st.session_state.user_email)}</div>
+          </div>
+        </div>""", unsafe_allow_html=True)
+
+        stats = get_user_stats(st.session_state.user_id)
+        sc1, sc2 = st.columns(2)
+        sc1.metric("Searches", stats.get("total", 0))
+        sc2.metric("Topics", stats.get("unique_topics", 0))
+
+        if st.button("Logout", use_container_width=True):
+            for k in ("user_id","username","user_email","user_searches"):
+                st.session_state[k] = defaults[k]
+            st.rerun()
+
+    st.markdown("---")
+
+    # ── SETTINGS ───────────────────────────────────────────────────────────────
     st.markdown("### ⚙️ Settings")
     wiki_lang   = st.selectbox("Language",         ["en", "de"])
     model       = st.selectbox("Model", [
@@ -141,12 +239,41 @@ with st.sidebar:
         api_key  = DEFAULT_API_KEY
         base_url = DEFAULT_BASE_URL
 
-    if st.session_state.history:
+    # ── CHAT HISTORY (logged-in users) ────────────────────────────────────────
+    if logged_in and st.session_state.user_searches:
         st.markdown("---")
-        st.markdown("### 🕘 History")
+        st.markdown("### 🕘 Search History")
+        grouped = group_by_date(st.session_state.user_searches)
+        for group_label, items in grouped.items():
+            st.markdown(f"<div class='hist-group-label'>{esc(group_label)}</div>",
+                        unsafe_allow_html=True)
+            for item in items:
+                btn_label = item["topic"][:30] + ("…" if len(item["topic"]) > 30 else "")
+                if st.button(btn_label, key=f"hist_{item['id']}", use_container_width=True):
+                    st.session_state.last_original  = item["original"]
+                    st.session_state.last_para      = item["paraphrase"]
+                    st.session_state.last_title     = item["topic"]
+                    st.session_state.last_lang      = item["lang"]
+                    st.session_state.topic_input    = item["topic"]
+                    st.session_state.translation    = ""
+                    st.session_state.quiz_questions = []
+                    st.session_state.quiz_answers   = {}
+                    st.session_state.quiz_submitted = False
+                    st.rerun()
+        if st.button("Clear History", use_container_width=True, key="clear_db_hist"):
+            for item in st.session_state.user_searches:
+                delete_search(item["id"], st.session_state.user_id)
+            _refresh_user_searches()
+            st.rerun()
+
+    elif not logged_in and st.session_state.history:
+        # guest session history (in-memory only)
+        st.markdown("---")
+        st.markdown("### 🕘 Session History")
+        st.caption("Login to save history permanently.")
         for h in reversed(st.session_state.history[-5:]):
             st.markdown(
-                f"<div class='hist-item'><b>{h['topic']}</b> ({h['lang'].upper()})<br>"
+                f"<div class='hist-item'><b>{esc(h['topic'])}</b> ({esc(h['lang'].upper())})<br>"
                 f"{h['words_orig']} → {h['words_para']} words</div>",
                 unsafe_allow_html=True,
             )
@@ -234,12 +361,23 @@ if go:
     st.session_state.quiz_answers   = {}
     st.session_state.quiz_submitted = False
 
-    # save history
-    st.session_state.history.append({
-        "topic": title_res, "lang": lang_res,
-        "words_orig": word_count(original),
-        "words_para": word_count(para) if para else 0,
-    })
+    # save to DB if logged in, else keep in-memory history
+    if st.session_state.user_id and para:
+        save_search(
+            user_id=st.session_state.user_id,
+            topic=title_res, lang=lang_res, model=model,
+            tone=tone, length=length,
+            original=original, paraphrase=para,
+            words_orig=word_count(original),
+            words_para=word_count(para),
+        )
+        _refresh_user_searches()
+    else:
+        st.session_state.history.append({
+            "topic": title_res, "lang": lang_res,
+            "words_orig": word_count(original),
+            "words_para": word_count(para) if para else 0,
+        })
 
 # ── results (persist after button click) ─────────────────────────────────────
 if st.session_state.last_original:
@@ -509,6 +647,9 @@ with st.expander("🐛 Debug"):
         "wiki_lang": wiki_lang, "model": model, "tone": tone, "length": length,
         "temperature": temperature, "streaming": streaming,
         "server_configured": server_configured,
+        "logged_in": logged_in,
+        "username": st.session_state.username,
         "history_count": len(st.session_state.history),
+        "db_searches": len(st.session_state.user_searches),
         "quiz_questions": len(st.session_state.quiz_questions),
     })
