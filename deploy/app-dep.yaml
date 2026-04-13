@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ CI_COMMIT_REF_NAME }}-app
+spec:
+  selector:
+    matchLabels:
+      app: {{ CI_COMMIT_REF_NAME }}-app
+  template:
+    metadata:
+      labels:
+        app: {{ CI_COMMIT_REF_NAME }}-app
+    spec:
+      imagePullSecrets:
+      - name: gitlab-registry-{{ CI_PROJECT_ID }}
+      containers:
+      - name: app
+        image: {{ CI_REGISTRY_IMAGE }}/app-{{ CI_COMMIT_REF_NAME }}:latest
+        ports:
+        - containerPort: 8501
+        env:
+         - name: MYLAB_BASE_URL
+           value: "https://models.mylab.th-luebeck.dev/v1"
+         - name: MYLAB_MODEL
+           value: "llama-3.3-70b"
+         - name: MYLAB_API_KEY
+           valueFrom:
+            secretKeyRef:
+              name: {{ CI_COMMIT_REF_NAME }}-secrets
+              key: MYLAB_API_KEY
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "128Mi"
+          limits:
+            cpu: "250m"
+            memory: "512Mi"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ CI_COMMIT_REF_NAME }}-secrets
+type: Opaque
+stringData:
+  MYLAB_API_KEY: "{{ MYLAB_API_KEY }}"
+

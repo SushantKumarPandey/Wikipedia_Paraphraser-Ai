@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ CI_COMMIT_REF_NAME }}-svc
+spec:
+  selector:
+    app: {{ CI_COMMIT_REF_NAME }}-app
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8501

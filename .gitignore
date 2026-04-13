@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# venv / local stuff
+.venv/
+.env
+.env.*
+*.log
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Build artifacts
+dist/
+build/
