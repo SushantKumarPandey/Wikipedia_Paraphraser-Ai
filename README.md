@@ -15,9 +15,7 @@ Type a topic, get the original Wikipedia text, and see an AI-generated paraphras
 
 ## Live Demo
 
-> **[Try it here →](https://sushant-wikipedia-paraphraser-ai.streamlit.app)** — no sign-up, no API key needed, works instantly
-
-*(Link updates once deployed — see [Deploy](#4-deploy-on-streamlit-community-cloud-free-public-url) below)*
+> **[Try it here →](https://wikipediaparaphraser-ai-twebnxev5v4d4tagvxjen6.streamlit.app)** — no sign-up, no API key needed, works instantly
 
 ![App preview](visualization.png)
 
