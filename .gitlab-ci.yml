@@ -5,33 +5,32 @@ variables:
   DEPLOY: "no"
 
 stages:
-- prepare
-- build
-- deploy
-- destroy
+  - prepare
+  - build
+  - deploy
 
 credentials:
   stage: prepare
   rules:
     - if: '$DEPLOY == "yes"'
   script:
-  - kubectl delete secret gitlab-registry-$CI_PROJECT_ID || true
-  - >
-    kubectl create secret docker-registry gitlab-registry-$CI_PROJECT_ID
-    --docker-server=$CI_REGISTRY
-    --docker-username=image-registry
-    --docker-password=$CI_REGISTRY_TOKEN
+    - kubectl delete secret gitlab-registry-$CI_PROJECT_ID || true
+    - >
+      kubectl create secret docker-registry gitlab-registry-$CI_PROJECT_ID
+      --docker-server=$CI_REGISTRY
+      --docker-username=image-registry
+      --docker-password=$CI_REGISTRY_TOKEN
 
 app-img:
   stage: build
   image: docker:28-dind
-  services: ["docker:28-dind"]
+  services:
+    - docker:28-dind
   rules:
     - if: '$DEPLOY == "yes"'
   script:
-    - docker version
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - docker build -t $CI_REGISTRY_IMAGE/app-$CI_COMMIT_REF_NAME:latest app/
+    - docker build -t $CI_REGISTRY_IMAGE/app-$CI_COMMIT_REF_NAME:latest .
     - docker push $CI_REGISTRY_IMAGE/app-$CI_COMMIT_REF_NAME:latest
 
 app:
@@ -39,9 +38,9 @@ app:
   rules:
     - if: '$DEPLOY == "yes"'
   script:
-  - mo deploy/app-dep.yaml | kubectl delete -f - || true
-  - mo deploy/app-dep.yaml | kubectl apply -f -
-  - mo deploy/app-svc.yaml | kubectl apply -f -
+    - mo deploy/app-dep.yaml | kubectl delete -f - || true
+    - mo deploy/app-dep.yaml | kubectl apply -f -
+    - mo deploy/app-svc.yaml | kubectl apply -f -
 
 ingress:
   stage: deploy
@@ -49,4 +48,4 @@ ingress:
     - if: '$DEPLOY == "yes"'
   when: manual
   script:
-  - HOST=uber-$CI_PROJECT_ID.$DOMAIN mo deploy/project-ing.yaml | kubectl apply -f -
+    - HOST=uber-$CI_PROJECT_ID.$DOMAIN mo deploy/project-ing.yaml | kubectl apply -f -
