@@ -3,18 +3,24 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.egg-info/
 
-# venv / local stuff
+# virtual envs
 .venv/
-.env
-.env.*
-*.log
+venv/
+env/
 
-# Editors / OS
+# secrets — never commit these
+.env
+*.env
+
+# editors / OS
 .vscode/
 .idea/
 .DS_Store
+Thumbs.db
 
-# Build artifacts
+# misc
+*.log
 dist/
 build/
