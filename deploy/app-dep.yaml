@@ -19,15 +19,15 @@ spec:
         ports:
         - containerPort: 8501
         env:
-         - name: MYLAB_BASE_URL
-           value: "https://models.mylab.th-luebeck.dev/v1"
-         - name: MYLAB_MODEL
-           value: "llama-3.3-70b"
-         - name: MYLAB_API_KEY
-           valueFrom:
+        - name: LLM_BASE_URL
+          value: "https://models.mylab.th-luebeck.dev/v1"
+        - name: LLM_MODEL
+          value: "llama-3.3-70b-versatile"
+        - name: LLM_API_KEY
+          valueFrom:
             secretKeyRef:
               name: {{ CI_COMMIT_REF_NAME }}-secrets
-              key: MYLAB_API_KEY
+              key: LLM_API_KEY
         resources:
           requests:
             cpu: "50m"
@@ -43,5 +43,4 @@ metadata:
   name: {{ CI_COMMIT_REF_NAME }}-secrets
 type: Opaque
 stringData:
-  MYLAB_API_KEY: "{{ MYLAB_API_KEY }}"
-
+  LLM_API_KEY: "{{ LLM_API_KEY }}"
